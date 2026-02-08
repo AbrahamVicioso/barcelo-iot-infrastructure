@@ -1,25 +1,68 @@
 services:
-  broker:
+  kafka:
     image: apache/kafka:4.2.0-rc3
-    hostname: broker
-    container_name: broker
+    hostname: kafka
+    container_name: kafka
+    user: root
     ports:
       - 9092:9092
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_NODE_ID: 1
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
-      KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-      # Habilitar creación automática de tópicos
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    # SIN HEALTHCHECK para instalación inicial
+
+  postgres:
+    restart: always
+    image: "postgres:16"
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: thingsboard
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  thingsboard-ce:
+    restart: always
+    image: "thingsboard/tb-node:4.3.0.1"
+    ports:
+      - "8080:8080"
+      - "7070:7070"
+      - "1883:1883"
+      - "8883:8883"
+      - "5683-5688:5683-5688/udp"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    environment:
+      TB_SERVICE_ID: tb-ce-node
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/thingsboard
+      TB_QUEUE_TYPE: kafka
+      TB_KAFKA_SERVERS: kafka:29092
+    depends_on:
+      - postgres
+      - kafka
+
+volumes:
+  postgres-data:
+    name: tb-postgres-data
+    driver: local
+  kafka-data:
+    name: tb-ce-kafka-data
+    driver: local
